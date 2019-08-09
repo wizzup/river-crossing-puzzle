@@ -7,12 +7,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 
-import System.IO (stdin, hSetEcho, hSetBuffering, BufferMode (NoBuffering))
+import Text.Printf (printf)
 import System.Exit (exitSuccess)
-import Text.Printf
-import Data.Set (Set)
+import System.IO   (stdin, hSetEcho, hSetBuffering
+                   ,BufferMode (NoBuffering))
+
+import Data.Set  (Set)
 import qualified Data.Set as S
-import Data.Char (chr)
 
 data ItemType = Fox
               | Goose
@@ -64,7 +65,8 @@ isBadState State{..}
       Start  -> bad finish
       Finish -> bad start
  where
-  bad' is x = x `S.isSubsetOf` is && Human `S.notMember` is
+  bad' is x = x `S.isSubsetOf` is 
+           && Human `S.notMember` is
   bad is = or $ bad' is <$> [fg,gb]
   fg = S.fromList [Fox,Goose]
   gb = S.fromList [Goose,Beans]
@@ -155,21 +157,24 @@ toggle i s@State{..}
 --------------------------------------------------------------------------------
 
 help :: IO ()
-help = mapM_ putStrLn
- ["Instruction:"
- ,""
- ,"<SPACE> for taking <..> (the boat) crossing the river"
- ,"<j> for load/unload " <> show Fox   <> "(Fox)"
- ,"<k> for load/unload " <> show Goose <> "(Goose)"
- ,"<l> for load/unload " <> show Beans <> "(Beans)"
- ,"<q> for quit the game (giving up)"
- ,""
- ,"press anykey to close this help"
- ]
+help = do
+  mapM_ putStrLn
+    ["Instruction:"
+    ,""
+    ,"<SPACE> for taking <..> (the boat) crossing the river"
+    ,"<j> for load/unload " <> show Fox   <> "(Fox)"
+    ,"<k> for load/unload " <> show Goose <> "(Goose)"
+    ,"<l> for load/unload " <> show Beans <> "(Beans)"
+    ,"<q> for quit the game (giving up)"
+    ,""
+    ,"press anykey to close this help"
+    ]
+  _ <- getChar
+  pure ()
 
 -- VT100 escape code
 esc :: String -> String
-esc s = chr 27 : s
+esc s = '\ESC' : s
 
 clearScreen :: IO ()
 clearScreen = clear >> home
@@ -178,8 +183,8 @@ clearScreen = clear >> home
   home  = putStr $ esc "[H"
 
 -- Fancy state status
-stateStatus :: State -> IO ()
-stateStatus s = putStrLn $ printf "%s %s" ss sc
+stateStatus :: Int -> State -> IO ()
+stateStatus n s = putStrLn $ printf "%s %s %d" ss sc n
  where
   ss = show s
   sc = if isGoodState s
@@ -192,36 +197,36 @@ stateStatus s = putStrLn $ printf "%s %s" ss sc
 exit :: IO ()
 exit = putStrLn "Giving up." >> exitSuccess
 
-loop :: State -> IO ()
-loop s
+loop :: Int -> State -> IO ()
+loop n s
   | s /= finalState = play
   | otherwise       = done
  where
   done = do
       clearScreen
       print postFinalState
+      putStrLn $ printf "You cross the river %d times" n
       putStrLn "Well done."
 
   play = do
     clearScreen
-    stateStatus s
+    stateStatus n s
 
     if isGoodState s
     then do
       c <- getChar
       case c of
-        ' ' -> loop $ crossRiver s
-        'j' -> loop $ toggle Fox s
-        'k' -> loop $ toggle Goose s
-        'l' -> loop $ toggle Beans s
         'q' -> exit
+        'j' -> loop n $ toggle Fox s
+        'k' -> loop n $ toggle Goose s
+        'l' -> loop n $ toggle Beans s
+        ' ' -> loop (succ n) $ crossRiver s
         _   -> do
                 help
-                _ <- getChar
-                loop s
+                loop n s
     else do
       clearScreen
-      stateStatus s
+      stateStatus n s
       putStrLn "You have failed, anykey to restart again."
       _ <- getChar
       main
@@ -234,5 +239,4 @@ main = do
   clearScreen
   print preInitState
   help
-  _ <- getChar
-  loop initState
+  loop 0 initState
